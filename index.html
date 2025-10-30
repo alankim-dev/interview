@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>역량 기반 면접 질문 생성기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .tab-btn {
+            @apply px-4 py-2 font-medium text-sm text-gray-500 border-b-2 border-transparent hover:text-blue-600 hover:border-blue-600 focus:outline-none;
+        }
+        .tab-btn.active {
+            @apply text-blue-600 border-blue-600;
+        }
+        .tab-panel {
+            @apply hidden p-4;
+        }
+        .tab-panel.active {
+            @apply block;
+        }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container max-w-7xl mx-auto p-4 md:p-8">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">역량 기반 면접 질문 생성기</h1>
+            <p class="text-lg text-gray-600 mt-2">직무와 역량 레벨을 선택하여 맞춤형 면접 질문지와 평가 루브릭을 생성하세요.</p>
+        </header>
+
+        <div class="bg-white shadow-lg rounded-xl p-6 md:p-8 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="job-group" class="block text-sm font-medium text-gray-700 mb-2">1. 직군 (Job Group)</label>
+                    <select id="job-group" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">직군을 선택하세요</option>
+                        <option value="Software Engineering">Software Engineering</option>
+                        <option value="Software Design">Software Design</option>
+                        <option value="Project Management">Project Management</option>
+                        <option value="Quality Assurance">Quality Assurance</option>
+                        <option value="Operations">Operations</option>
+                        <option value="Art">Art</option>
+                        <option value="Sound">Sound</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Administration">Administration</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="sk-level" class="block text-sm font-medium text-gray-700 mb-2">2. S&K 레벨 (Skill & Knowledge)</label>
+                    <select id="sk-level" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">S&K 레벨을 선택하세요</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="rr-level" class="block text-sm font-medium text-gray-700 mb-2">3. R&R 레벨 (Role & Responsibilities)</label>
+                    <select id="rr-level" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">R&R 레벨을 선택하세요</option>
+                    </select>
+                </div>
+            </div>
+            <button id="generate-btn" class="w-full md:w-auto mt-6 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-150 ease-in-out">
+                질문지 생성하기
+            </button>
+            <div id="loading" class="hidden loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10 mt-6 mx-auto"></div>
+        </div>
+
+        <div id="output-container" class="hidden bg-white shadow-lg rounded-xl overflow-hidden">
+            <div class="p-6 border-b border-gray-200">
+                <h2 id="output-title" class="text-2xl font-bold text-gray-900"></h2>
+            </div>
+
+            <div>
+                <nav class="flex border-b border-gray-200" aria-label="Tabs">
+                    <button class="tab-btn active" data-tab="sk-questions">S&K 역량 질문</button>
+                    <button class="tab-btn" data-tab="rr-questions">R&R 역량 질문</button>
+                    <button class="tab-btn" data-tab="culture-fit">Culture Fit 질문</button>
+                    <button class="tab-btn" data-tab="rubric">역량 평가 루브릭</button>
+                </nav>
+
+                <div id="tab-panels" class="divide-y divide-gray-100">
+                    <div id="sk-questions-panel" class="tab-panel active"></div>
+                    <div id="rr-questions-panel" class="tab-panel"></div>
+                    <div id="culture-fit-panel" class="tab-panel"></div>
+                    <div id="rubric-panel" class="tab-panel"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-message" class="hidden mt-8 p-6 bg-red-100 border border-red-300 text-red-800 rounded-lg shadow">
+            <h3 class="font-bold text-lg mb-2">데이터 없음</h3>
+            <p>선택한 직군과 레벨에 해당하는 세부 지표 데이터를 찾을 수 없습니다. 다른 조합을 시도해 주세요.</p>
+        </div>
+    </div>
+
+<script>
+    const indicatorData = {
+      "Software Engineering": {
+        "S&K1": {
+          "1": { "keyword": "1. 기본 개발 지식", "description": "프로그래밍 언어, 자료구조, 알고리즘 등 기본 개발 지식을 보유하고 업무에 적용한다." },
+          "2": { "keyword": "2. 개발 툴 활용", "description": "IDE, 버전 관리 시스템(Git 등) 등 기본 개발 툴을 능숙하게 활용한다." },
+          "3": { "keyword": "3. 업무 이해", "description": "주어진 업무의 요구사항을 명확히 이해하고, 상사의 가이드에 따라 업무를 수행한다." },
+          "4.": { "keyword": "4. 코드 작성", "description": "가독성 있고 기본적인 표준을 준수하는 코드를 작성한다." },
+          "5": { "keyword": "5. 학습 태도", "description": "새로운 기술과 지식에 대해 지속적인 학습 태도를 보이며, 동료의 피드백을 수용한다." }
+        },
+        "S&K2": {
+          "1": { "keyword": "1. 기능 개발", "description": "담당하는 기능의 요구사항을 분석하고, 독립적으로 개발을 완료하며 테스트 코드를 작성한다." },
+          "2": { "keyword": "2. 코드 리뷰", "description": "동료의 코드 리뷰에 참여하고, 의미 있는 피드백을 주고받으며 코드 품질을 개선한다." },
+          "3": { "keyword": "3. 트러블슈팅", "description": "발생한 버그나 이슈의 원인을 파악하고, 재발 방지를 고려하여 문제를 해결한다." },
+          "4.": { "keyword": "4. 시스템 이해", "description": "담당하는 시스템의 아키텍처와 데이터 흐름을 이해하고, 연관 시스템과의 관계를 파악한다." },
+          "5": { "keyword": "5. 문서화", "description": "개발한 기능에 대한 기술 문서를 작성하고, 변경 이력을 관리하여 동료들과 공유한다." }
+        },
+        "S&K3": {
+          "1": { "keyword": "1. 프로세스 고도화", "description": "타 조직의 다양한 관점을 폭넓게 통합하여 기존 프로세스를 지속적으로 개선하고, 업무 수행의 품질을 향상한다." },
+          "2": { "keyword": "2. 프로젝트 리딩", "description": "프로젝트 흐름을 전반적으로 이해하고 핵심 마일스톤 달성을 목표로 성능과 보안을 최적화한다." },
+          "3": { "keyword": "3. 복합적 문제해결", "description": "Data 기반의 지식 분석과 복합적인 문제 정의를 통해 발생한 문제를 신속하게 해결한다." },
+          "4.": { "keyword": "4. 프로젝트 관리", "description": "프로젝트 전반 성능 최적화 및 보안 설계를 수행한다." },
+          "5": { "keyword": "5. 전략적 요구 대응", "description": "프로덕트 간 시스템 관계를 이해하고 문서화하며, 팀/유관부서와 협력하여 기술적 요구사항을 명확히 한다." }
+        },
+        "S&K4": {
+          "1": { "keyword": "1. 시스템 설계", "description": "비즈니스 요구사항을 기술적 요구사항으로 변환하고, 확장성/보안/성능을 고려한 시스템을 설계한다." },
+          "2": { "keyword": "2. 기술 리더십", "description": "팀 내 기술적 방향성을 제시하고, 복잡한 기술적 의사결정을 주도하며, 주니어 개발자의 멘토링을 담당한다." },
+          "3": { "keyword": "3. 아키텍처 최적화", "description": "기존 시스템의 문제점을 진단하고, 아키텍처 개선을 통해 시스템의 안정성과 효율성을 장기적으로 향상시킨다." },
+          "4": { "keyword": "4. 기술 전략 수립", "description": "최신 기술 트렌드를 분석하여 팀/조직의 기술 스택과 로드맵에 반영하는 전략을 수립하고 실행한다." },
+          "5": { "keyword": "5. 대규모 트래픽 처리", "description": "대규모 트래픽 환경에서의 시스템 운영 경험을 바탕으로, 장애를 사전에 예방하고 안정적인 서비스 운영을 보장한다." }
+        },
+        "S&K5": {
+          "1": { "keyword": "1. 혁신 솔루션 설계", "description": "전사적 관점에서 비즈니스 문제를 정의하고, 기술적 혁신을 통해 새로운 솔루션을 설계하고 구현을 리드한다." },
+          "2": { "keyword": "2. 기술 비전 제시", "description": "조직의 비즈니스 목표와 연계된 중장기 기술 비전과 전략을 제시하고, 경영진을 설득하여 실행을 이끈다." },
+          "3": { "keyword": "3. 조직적 기술 역량 강화", "description": "조직 전체의 기술 역량 수준을 진단하고, 표준/교육/프로세스 개선을 통해 엔지니어링 문화를 선도하고 역량을 상향 평준화한다." },
+          "4.": { "keyword": "4. 핵심 파트너십", "description": "내외부의 핵심 기술 파트너(타 부서, 외부 기업 등)와의 전략적 관계를 구축하고, 복잡한 협업을 성공적으로 이끈다." },
+          "5": { "keyword": "5. 미래 기술 탐색", "description": "미래 비즈니스에 영향을 줄 수 있는 핵심 기술(AI, Blockchain 등)을 선도적으로 탐색하고, 프로토타이핑을 통해 기술적 가능성을 검증한다." }
+        },
+        "S&K6": {
+          "1": { "keyword": "1. 혁신적 비전 제시", "description": "글로벌 최고 기술 전문가로서 조직 차원의 방향성을 제시하고, 중장기적 기술 혁신 비전을 제시하여 장기적인 성장을 도모한다." },
+          "2": { "keyword": "2. 글로벌 프로젝트 리딩", "description": "전사 전략에 대해 시스템적 조언을 경영진에게 제공하고, 글로벌 관점에서 비즈니스 목표와 연계된 혁신적 전략을 추진하며, 글로벌 혁신 프로젝트를 리딩한다." },
+          "3": { "keyword": "3. Global Industry Leader", "description": "조직 내 최신 기술 동향과 기술적 노하우를 파악하여 전체에 전파하고, 기술적 비전과 프로덕트 방향을 제시하여 업계를 선도하고 글로벌 성과를 극대화한다." },
+          "4.": { "keyword": "4. 글로벌 리더십", "description": "Cutting Edge Industry Tech 동향을 파악하고 글로벌 비즈니스에 접목하여, 글로벌 시장에서 기술과 비즈니스의 혁신을 선도한다." },
+          "5": { "keyword": "5. 글로벌 기술 생태계 기여", "description": "글로벌 기술 생태계(오픈소스, 컨퍼런스 등)에 기여하고, 전사적 기술 브랜딩을 강화하여 우수 인재 영입에 기여한다." }
+        },
+        "R&R1": {
+          "1": { "keyword": "1. 업무 완수", "description": "주어진 업무를 기한 내에 정확하게 완수하며, 상사의 피드백을 반영하여 결과물을 개선한다." },
+          "2": { "keyword": "2. 기본 규칙 준수", "description": "회사의 규정과 팀의 업무 프로세스(코드 컨벤션, 일정 관리 등)를 명확히 인지하고 준수한다." },
+          "3.": { "keyword": "3. 적극적 소통", "description": "업무 진행 상황을 상사 및 동료에게 제때 공유하고, 이슈 발생 시 즉시 도움을 요청하여 해결한다." },
+          "4.": { "keyword": "4. 책임감", "description": "본인이 맡은 업무와 역할에 대해 책임감을 가지고, 실수나 오류를 인정하고 수정하려 노력한다." },
+          "5": { "keyword": "5. 업무 환경 적응", "description": "새로운 업무 환경과 툴에 빠르게 적응하고, 업무 수행에 필요한 지식을 적극적으로 학습한다." }
+        },
+        "R&R2": {
+          "1": { "keyword": "1. 자기주도성", "description": "독립적으로 기능을 개발하고 이슈를 처리하며, 리팩토링 및 애플리케이션 개발을 수행하여 능동적으로 주어진 업무를 자율적으로 진행한다." },
+          "2": { "keyword": "2. 프로젝트수행", "description": "기획 의도를 이해하고, 담당 업무에 대해 동료들이 납득할 수 있는 본인의 일정을 제시, 관리하며 작업을 마무리한다." },
+          "3.": { "keyword": "3. 논리적 문제 해결", "description": "기획 의도를 정확히 파악하고 논리적 근거에 기반해 문제 해결책을 제시한다." },
+          "4.": { "keyword": "4. 부서 간 협력", "description": "협업하는 팀과 다른 팀/파트의 기능과 프로세스를 이해하고, 여러 부서와 협력하여 업무를 효율적으로 조율하며 성과를 창출한다." },
+          "5": { "keyword": "5. 적극적 피드백", "description": "동료의 성장을 돕기 위해 구체적인 근거를 바탕으로 건설적인 피드백을 적극적으로 주고받는다." }
+        },
+        "R&R3": {
+          "1": { "keyword": "1. 목표 관리", "description": "팀/조직의 목표를 명확히 이해하고, 담당하는 프로덕트의 우선순위를 설정하며, 구성원들의 업무를 효과적으로 배분한다." },
+          "2": { "keyword": "2. 구성원 리드", "description": "구성원들에게 명확한 업무 가이드를 제공하고, 동기를 부여하며, 정기적인 피드백을 통해 성과 달성을 지원한다." },
+          "3.": { "keyword": "3. 성과 창출", "description": "담당 조직(팀)의 핵심 성과 지표(KPI)를 관리하고, 장애물을 제거하여 지속적인 성과를 창출하도록 이끈다." },
+          "4.": { "keyword": "4. 인재 육성", "description": "구성원의 강점과 약점을 파악하고, 경력 개발을 위한 멘토링과 코칭을 제공하여 팀의 전반적인 역량을 강화한다." },
+          "5": { "keyword": "5. 조직 문화 개선", "description": "팀 내/간의 갈등을 중재하고, 긍정적인 협업 문화를 조성하여 조직의 결속력을 높인다." }
+        },
+        "R&R4": {
+          "1": { "keyword": "1. 핵심 성과 리드", "description": "팀 이상 단위 조직 또는 직군의 목표를 수립하고, 자원을 배분하며, 핵심 이니셔티브를 주도하여 성과를 창출한다." },
+          "2": { "keyword": "2. 조직간 협력", "description": "여러 부서(직군) 간의 복잡한 이해관계를 조율하고, 공동의 목표를 향해 시너지를 낼 수 있도록 협력을 이끈다." },
+          "3": { "keyword": "3. 리더 양성", "description": "차세대 리더(팀장급)를 발굴하고, 필요한 역량을 갖출 수 있도록 체계적인 육성 및 권한 위임을 실행한다." },
+          "4.": { "keyword": "4. 조직 혁신", "description": "비효율적인 프로세스나 구조를 진단하고, 데이터와 구성원의 의견에 기반하여 조직 구조 및 업무 방식을 혁신한다." },
+          "5": { "keyword": "5. 비전 전파", "description": "회사의 비전과 전략을 조직의 상황에 맞게 해석하여 전파하고, 구성원들이 공감하고 몰입할 수 있도록 이끈다." }
+        },
+        "R&R5": {
+          "1": { "keyword": "1. 전사 전략 수립", "description": "전사 비전과 중장기 목표 달성을 위한 핵심 전략을 수립하고, 경영진의 의사결정을 지원한다." },
+          "2": { "keyword": "2. 다각적 통찰력", "description": "시장, 경쟁사, 고객, 기술 등 다각적인 관점에서 비즈니스 환경을 분석하고, 새로운 기회와 위협 요인을 식별한다." },
+          "3.": { "keyword": "3. 전사 자원 배분", "description": "전사적 우선순위에 따라 인적/물적 자원을 배분하고, 핵심 비즈니스의 성장을 견인한다." },
+          "4.": { "keyword": "4. 핵심 인재 확보", "description": "비즈니스 전략에 필요한 핵심 인재(시니어급 이상)를 정의하고, 영입 및 유지 전략을 주도한다." },
+          "5": { "keyword": "5. 기업 문화 선도", "description": "회사의 핵심 가치가 조직 전반에 내재화될 수 있도록 기업 문화를 설계하고, 이를 선도적으로 실천한다." }
+        },
+        "R&R6": {
+          "1": { "keyword": "1. 비전 제시 및 달성", "description": "그룹 전체 혹은 비즈니스 전반에 영향을 미치는 비전을 제시하고, 전사적 역량을 결집하여 위업을 달성한다." },
+          "2": { "keyword": "2. 패러다임 변화 주도", "description": "기존의 틀을 깨는 혁신적인 아이디어로 새로운 시장을 창출하거나, 업계의 패러다임을 변화시킨다." },
+          "3": { "keyword": "3. 글로벌 영향력", "description": "글로벌 비즈니스 환경에 대한 깊은 통찰력으로, 전사적 영향력을 발휘하고 글로벌 성과를 극대화한다." },
+          "4.": { "keyword": "4. 위기 관리", "description": "전사적 차원의 중대한 위기 상황을 예측하고, 신속하고 전략적인 대응을 통해 비즈니스의 지속 가능성을 확보한다." },
+          "5": { "keyword": "5. 후계자 양성", "description": "회사의 비전을 이어갈 핵심 경영진(후계자)을 장기적인 관점에서 발굴하고 양성한다." }
+        }
+      },
+      "Art": {
+        "S&K1": {}, "S&K2": {}, "S&K3": {}, "S&K4": {}, "S&K5": {}, "S&K6": {},
+        "R&R1": {
+          "1": { "keyword": "1. 역할 충실 수행", "description": "주어진 업무의 목적과 방향을 이해하고, 지시에 따라 성실히 수행하여 업무를 완수한다." },
+          "2": { "keyword": "2. 기본 문제 해결", "description": "직면한 문제에 대해 자율적으로 해결을 시도하며, 필요 시 상사에게 보고하여 효율적인 문제 해결을 지원한다." },
+          "3": { "keyword": "3. 목표 이해 및 성과 달성", "description": "주어진 기한 내에 담당 업무를 완수하여 기한내에 정해진 목표를 충실히 달성하며, 업무의 완성도를 향상시킨다." },
+          "4": { "keyword": "4. 협조적인 태도", "description": "팀원과 긴밀히 협력하며, 필요 시 적극적으로 도움을 요청하거나 지원을 제공하여 공동의 목표 달성을 촉진한다." },
+          "5": { "keyword": "5. 자발적인 학습능력", "description": "이해가 부족한 사항에 대해 적극적으로 문의하며, 필요한 역량을 자발적으로 습득해 업무 완성도를 높인다." }
+        },
+        "R&R2": {
+          "1": { "keyword": "1. 자기주도성", "description": "게임 기획과 흐름에 대한 이해를 바탕으로 아트 리소스 제작업무를 독립적으로 수행한다." },
+          "2": { "keyword": "2. 프로젝트수행", "description": "기획 의도를 이해하고, 개발자와 합리적인 일정을 도출하여 작업을 마무리한다." },
+          "3": { "keyword": "3. 논리적 문제 해결", "description": "객관적인 근거자료를 바탕으로 결과물에 대한 개선사항을 제시하여, 논리적인 해결책으로 품질을 높이고 문제를 해결한다." },
+          "4": { "keyword": "4. 부서 간 협력", "description": "협업하는 팀과 다른 팀/파트의 기능과 프로세스를 이해하고, 원활한 커뮤니케이션을 통해 디자인 아웃풋을 창출하며, 여러 부서와 협력한다." },
+          "5": { "keyword": "5. 소통 및 조율", "description": "다른 팀과의 소통을 통해 협업 부서의 목표와 목적을 이해하며 조율하여 업무 흐름을 최적화한다." }
+        },
+        "R&R3": {
+          "1": { "keyword": "1. 목표 설정 및 달성", "description": "프로젝트를 주도적으로 리딩하고 매니지먼트하여 구성원들이 지속적으로 작업 일정을 준수하도록 지원한다." },
+          "2": { "keyword": "2. 업무 분배", "description": "프로젝트 단위 업무 수행 시, 관련 커뮤니케이션을 리딩하고 구성원들에게 업무를 효과적으로 분배하고, 작업 일정이 준수될 수 있도록 관리한다." },
+          "3": { "keyword": "3. 피드백 제공", "description": "작업된 결과들에 대한 구조적 디테일 부분에서 건설적인 피드백 및 개선 방향성을 제시하여 성과 향상 및 조직 성과 향상을 지원한다." },
+          "4": { "keyword": "4. 성과 모니터링", "description": "할당된 작업을 정밀하게 수행하고 과정을 깊이 이해하며 개선 사항을 전략적으로 분석하여, 성과를 지속적으로 모니터링하고 발전시킨다." },
+          "5": { "keyword": "5. 지속적 성과 창출", "description": "프로젝트 리딩과 구성원 매니지먼트를 통해 지속 가능한 성과를 창출하고, 장기적 성과 관리를 유지하며 팀의 성장을 지원한다." }
+        },
+        "R&R4": {
+          "1": { "keyword": "1. 전사 프로젝트 리딩", "description": "조직 내 공동 목표 달성을 위해 여러 프로젝트의 Milestone을 효율적으로 관리한다." },
+          "2": { "keyword": "2. 이해관계자 관리", "description": "다양한 직군과의 커뮤니케이션을 통해 합리적인 의사결정을 가능하게 하고, 최적의 아웃풋을 창출한다." },
+          "3": { "keyword": "3. 부서 간 협업 조정", "description": "협업 부서의 업무를 이해하고 Cross Functional 차원의 이슈를 해결하며 부서 간 협업을 조율함으로써 큰 규모의 프로젝트를 완성한다." },
+          "4": { "keyword": "4. 성과 극대화", "description": "조직 내 공동 목표 달성을 위해 여러 프로젝트를 동시에 주도하며 효율적인 자원 배분을 통해 전사적 성과를 극대화한다." },
+          "5": { "keyword": "5. 복잡한 문제 해결", "description": "다수의 이해관계자가 얽힌 복잡한 문제를 다각도로 접근하고 분석하여, 통합적인 해결 방안을 수립하고, 효과적으로 이행한다." }
+        },
+        "R&R5": {
+          "1": { "keyword": "1. 전략적 리딩", "description": "변화하는 기술 및 시장 환경에서 선제적으로 대응하는 전략적 의사결정을 통해 조직의 경쟁 우위를 지속 가능하게 확보하며, 장기적 성장과 비전 실현을 리딩한다." },
+          "2": { "keyword": "2. 합리적 의사결정", "description": "다양한 직군과 직무 간 커뮤니케이션 허브 역할을 수행하여 합리적 의사결정을 촉진하며 성과를 극대화할 수 있는 합리적인 판단을 내린다." },
+          "3": { "keyword": "3. 전사적 변화 주도", "description": "조직의 장기적 전략과 비전을 실현하기 위해 전사적 변화를 주도하고, 조직 전체의 성과를 극대화하여 지속 가능한 성장을 도모한다." },
+          "4": { "keyword": "4. 전사 문제해결", "description": "전사적 차원의 복잡한 이슈를 통합적이고 종합적으로 분석하여 문제의 근본 원인을 명확히 진단하고, 장기적인 효과를 고려한 실효성 있는 해결 방안을 제시한다." },
+          "5": { "keyword": "5. 단위국가 파트너 협력", "description": "폭넓은 이해관계자와 전략적 파트너십을 형성하고, 각 분야의 특성과 목표를 통합하여 시너지를 극대화하는 성과를 창출한다." }
+        },
+        "R&R6": {
+          "1": { "keyword": "1. 글로벌 전략 수립", "description": "업계 트렌드와 변화에 대한 선도적 이해를 바탕으로 전사 단위 업무 및 사업의 중장기 방향성을 제시하고 글로벌 차원의 중장기 전략을 수립한다." },
+          "2": { "keyword": "2. 글로벌 리더십 발휘", "description": "Industry 내에서 영향력과 통찰력을 발휘하여 누구나 인정할 수 있는 리더십으로 글로벌 성과를 창출하고 조직을 선도한다." },
+          "3": { "keyword": "3. 혁신적 변화 주도", "description": "전사적 프로세스의 근본적인 변화를 글로벌 파트너와 협력하여 주도하고, 최신 기술과 업계 동향을 반영하여 Industry 내에서 선구자적인 영향력을 행사한다." },
+          "4": { "keyword": "4. 전사적 프로젝트 리딩", "description": "전사 전략에 대해 시스템적 조언을 경영진에게 제공하고, 글로벌 관점에서 비즈니스 목표와 연계된 혁신적 전략을 추진하며, 글로벌 혁신 프로젝트를 리딩한다." },
+          "5": { "keyword": "5. 글로벌 성과 극대화", "description": "업계 최고 수준의 혁신 성과를 달성하여 조직이 글로벌 사운드 산업에서 표준을 제시하는 선도적 위치를 확립한다." }
+        }
+      }
+    };
+
+    const levelMatrix = {
+      "S&K1": { "R&R1": "L3", "R&R2": "L3", "R&R3": "L4", "R&R4": "L4", "R&R5": "L5", "R&R6": "L6" },
+      "S&K2": { "R&R1": "L3", "R&R2": "L4", "R&R3": "L4", "R&R4": "L5", "R&R5": "L6", "R&R6": "L7/LM7" },
+      "S&K3": { "R&R1": "L4", "R&R2": "L4", "R&R3": "L5", "R&R4": "L6", "R&R5": "L7/LM7", "R&R6": "L8/LM8" },
+      "S&K4": { "R&R1": "L4", "R&R2": "L5", "R&R3": "L6", "R&R4": "L7/LM7", "R&R5": "L8/LM8", "R&R6": "L9/LM9" },
+      "S&K5": { "R&R1": "L5", "R&R2": "L6", "R&R3": "L7/LM7", "R&R4": "L8/LM8", "R&R5": "L9/LM9", "R&R6": "L10/LM10" },
+      "S&K6": { "R&R1": "L6", "R&R2": "L7/LM7", "R&R3": "L8/LM8", "R&R4": "L9/LM9", "R&R5": "L10/LM10", "R&R6": "L11/LM11" }
+    };
+
+    const competencyNames = {
+      "S&K1": "Basic Job knowledge",
+      "S&K2": "Practical Experience",
+      "S&K3": "Build 360 Workflow",
+      "S&K4": "Leading Expert",
+      "S&K5": "Innovation",
+      "S&K6": "Global Innovator",
+      "R&R1": "Ownership",
+      "R&R2": "Collaboration",
+      "R&R3": "Driving Achievement",
+      "R&R4": "Cross Functional Achievement",
+      "R&R5": "Strategic Leadership Achievement",
+      "R&R6": "Visionary Pioneer"
+    };
+
+    const cultureData = [
+      {
+        principle: "Work Transparently and Proactively (투명하고 주도적인 업무)",
+        questions: [
+          "업무의 맥락과 데이터를 동료들과 투명하게 공유하려 노력했던 경험이 있나요? 왜 그것이 중요하다고 생각했으며, 어떤 방식으로 공유했고 그 결과는 어땠는지 말씀해 주세요.",
+          "상사의 지시나 요청이 있기 전에 스스로 문제를 발견하고 주도적으로 해결책을 찾아 실행했던 경험에 대해 말씀해 주세요. (문제 인지 계기, 본인의 역할, 결과)"
+        ]
+      },
+      {
+        principle: "Communicate with Fearless Truthfulness (솔직하고 두려움 없는 소통)",
+        questions: [
+          "동료의 업무 방식이나 결과물에 대해 솔직하지만 불편할 수 있는 피드백을 전달해야 했던 경험이 있나요? 당시 왜 피드백이 필요하다고 판단했으며, 어떤 방식으로 소통했고, 그 결과는 어땠는지 말씀해 주세요.",
+          "반대로, 본인의 업무에 대해 동료로부터 솔직하지만 따끔한 피드백을 받았던 경험이 있나요? 당시 기분은 어땠고, 그 피드백을 어떻게 수용(또는 반박)했으며, 이후 어떤 변화가 있었는지 말씀해 주세요."
+        ]
+      },
+      {
+        principle: "Solve with the 1-3-1 Rule (문제 정의 및 해결책 제시)",
+        questions: [
+          "업무 중 명확한 문제가 발생했을 때, 상사에게 보고하는 본인만의 방식이 있나요? 문제 상황만 공유하는 편인지, 아니면 해결 방안을 함께 제시하는 편인지 구체적인 사례를 들어 설명해 주세요.",
+          "복잡한 문제에 대해 여러 대안(3가지)을 고민하고, 그중 최적의 안(1가지)을 도출해 상사를 설득했던 경험이 있나요? 대안들을 도출한 기준과, 최적의 안을 선택한 논리가 무엇이었는지 궁금합니다."
+        ]
+      }
+    ];
+
+    const rubricDefinitions = {
+      H: "높은 수준을 지속 유지하며 해당 역량을 발휘하여 조직 및 구성원에게 긍정적인 영향을 미침",
+      M: "대부분의 업무수행에서 해당 역량을 주도적으로 발휘함",
+      I: "상사의 지시에 의해서만 수동적으로 발현되거나, 주도적으로 발현되더라도 상사의 개입이 필요함"
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const jobGroupSelect = document.getElementById('job-group');
+        const skLevelSelect = document.getElementById('sk-level');
+        const rrLevelSelect = document.getElementById('rr-level');
+        const generateBtn = document.getElementById('generate-btn');
+        const loading = document.getElementById('loading');
+        const outputContainer = document.getElementById('output-container');
+        const errorMessage = document.getElementById('error-message');
+        const outputTitle = document.getElementById('output-title');
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+
+        // Initialize dropdowns
+        Object.keys(levelMatrix).forEach(level => {
+            const option = document.createElement('option');
+            option.value = level;
+            option.textContent = `${level} (${competencyNames[level] || ''})`;
+            skLevelSelect.appendChild(option);
+        });
+
+        Object.keys(levelMatrix['S&K1']).forEach(level => {
+            const option = document.createElement('option');
+            option.value = level;
+            option.textContent = `${level} (${competencyNames[level] || ''})`;
+            rrLevelSelect.appendChild(option);
+        });
+
+        generateBtn.addEventListener('click', () => {
+            loading.classList.remove('hidden');
+            outputContainer.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            setTimeout(() => { 
+                const jobGroup = jobGroupSelect.value;
+                const skLevel = skLevelSelect.value;
+                const rrLevel = rrLevelSelect.value;
+
+                if (!jobGroup || !skLevel || !rrLevel) {
+                    loading.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
+                    errorMessage.querySelector('p').textContent = '직군, S&K 레벨, R&R 레벨을 모두 선택해 주세요.';
+                    return;
+                }
+
+                const dataKey = jobGroup;
+                const expectedLevel = levelMatrix[skLevel]?.[rrLevel] || 'N/A';
+                const skName = competencyNames[skLevel] || 'N/A';
+                const rrName = competencyNames[rrLevel] || 'N/A';
+
+                const skIndicators = indicatorData[dataKey]?.[skLevel];
+                const rrIndicators = indicatorData[dataKey]?.[rrLevel];
+
+                if (!skIndicators || !rrIndicators) {
+                    loading.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
+                    errorMessage.querySelector('p').textContent = '선택한 직군과 레벨에 해당하는 세부 지표 데이터를 찾을 수 없습니다. 다른 조합을 시도해 주세요.';
+                    return;
+                }
+
+                outputTitle.textContent = `${jobGroup} / ${expectedLevel} 면접 질문 및 평가 가이드`;
+
+                document.getElementById('sk-questions-panel').innerHTML = generateQuestionsHtml(skIndicators, skLevel, skName, 'S&K');
+                document.getElementById('rr-questions-panel').innerHTML = generateQuestionsHtml(rrIndicators, rrLevel, rrName, 'R&R');
+                document.getElementById('culture-fit-panel').innerHTML = generateCultureFitHtml();
+                document.getElementById('rubric-panel').innerHTML = generateRubricHtml(skIndicators, 'S&K') + generateRubricHtml(rrIndicators, 'R&R');
+                
+                loading.classList.add('hidden');
+                outputContainer.classList.remove('hidden');
+                
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabPanels.forEach(panel => panel.classList.remove('active'));
+                tabButtons[0].classList.add('active');
+                tabPanels[0].classList.add('active');
+
+            }, 500);
+        });
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                
+                const tabId = button.getAttribute('data-tab');
+                
+                tabPanels.forEach(panel => {
+                    if (panel.id === `${tabId}-panel`) {
+                        panel.classList.add('active');
+                    } else {
+                        panel.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        function generateQuestionsHtml(indicators, level, name, type) {
+            let html = `<div class="p-4 space-y-6">
+                <h3 class="text-xl font-bold text-gray-800">(Target: ${level}) - ${name}</h3>`;
+            
+            for (const key in indicators) {
+                const item = indicators[key];
+                html += `
+                    <div class="border-l-4 border-blue-500 pl-4 py-2 bg-gray-50 rounded-r-lg">
+                        <h4 class="text-lg font-semibold text-gray-700">${item.keyword}</h4>
+                        <div class="mt-3 space-y-3 text-gray-800">
+                            <p><strong>Q1:</strong> "${item.keyword}" 역량과 관련하여, "${item.description}"을(를) 실제로 수행했던 경험이 있다면 STAR (상황, 과제, 행동, 결과) 방식으로 자세히 말씀해 주시겠어요?</p>
+                            <p><strong>Q2:</strong> 해당 역량을 발휘하여 가장 큰 성과를 냈거나, 반대로 가장 어려움을 겪었던 경험은 무엇인가요? 당시 본인의 구체적인 역할과 배운 점을 중심으로 설명해 주세요.</p>
+                        </div>
+                    </div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function generateCultureFitHtml() {
+            let html = `<div class="p-4 space-y-6">
+                <h3 class="text-xl font-bold text-gray-800">C. Culture Fit 질문 (Ways of Working)</h3>`;
+            
+            cultureData.forEach(item => {
+                html += `
+                    <div class="border-l-4 border-green-500 pl-4 py-2 bg-gray-50 rounded-r-lg">
+                        <h4 class="text-lg font-semibold text-gray-700">${item.principle}</h4>
+                        <div class="mt-3 space-y-3 text-gray-800">
+                            ${item.questions.map((q, i) => `<p><strong>Q${i+1}:</strong> ${q}</p>`).join('')}
+                        </div>
+                    </div>`;
+            });
+            html += `</div>`;
+            return html;
+        }
+
+        function generateRubricHtml(indicators, type) {
+            let html = `<div class="p-4 space-y-6">
+                <h3 class="text-xl font-bold text-gray-800">D. 역량 평가 루브릭 (${type})</h3>
+                <div class="overflow-x-auto shadow-md rounded-lg">
+                    <table class="w-full text-sm text-left text-gray-600">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 w-1/4">평가 항목 (${type})</th>
+                                <th scope="col" class="px-6 py-3">H (High)</th>
+                                <th scope="col" class="px-6 py-3">M (Moderate)</th>
+                                <th scope="col" class="px-6 py-3">I (Initial)</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            for (const key in indicators) {
+                const item = indicators[key];
+                const desc = item.description;
+                html += `
+                            <tr class="bg-white border-b hover:bg-gray-50">
+                                <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${item.keyword}</th>
+                                <td class="px-6 py-4">"${desc}"를(을) '지속적'이고 '주도적으로' 수행하여 '명확한 성과'를 창출한 성공 사례를 구체적으로 제시함.</td>
+                                <td class="px-6 py-4">"${desc}"를(을) '일부' 수행했거나 '일회성'이지만 주도적으로 성과를 낸 경험을 제시함. 또는, 성과가 다소 불명확함.</td>
+                                <td class="px-6 py-4">"${desc}" 경험이 없거나, 상사의 지시에 의해서만 수동적으로 수행한 경험만 있음.</td>
+                            </tr>`;
+            }
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+
+            if (type === 'R&R') {
+                html += `
+                <div class="p-4 mt-6 bg-gray-50 rounded-lg border">
+                    <h4 class="text-md font-semibold text-gray-700 mb-3">참고: 평가 등급 정의</h4>
+                    <ul class="space-y-2 text-sm text-gray-600">
+                        <li><strong>H (High):</strong> ${rubricDefinitions.H}</li>
+                        <li><strong>M (Moderate):</strong> ${rubricDefinitions.M}</li>
+                        <li><strong>I (Initial):</strong> ${rubricDefinitions.I}</li>
+                    </ul>
+                </div>`;
+            }
+            
+            return html;
+        }
+    });
+</script>
+
+</body>
+</html>
